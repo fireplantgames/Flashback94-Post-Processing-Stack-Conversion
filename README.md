@@ -1,3 +1,6 @@
+I recently converted the Flashback 94 post processing shader to Unity's new post processing stack for another team - and thought I may as well upload it here as well. The only file changes compared to the original is the removal of the editor class for the post processing script, adjustments to **Flashback94_PostProcess.cs** & **Flashback94_ImageEffect_ColorQuantize.shader**. Unlike the original shader there is no support for relative/no downsampling but it could easily be added if there's interest. Let me know and I'll get to it in my spare time. 
+
+- Original Readme - 
 ## The *Flashback '94 Shader Pack* for Unity
 
 ![](Screenshots/fb94logo.jpg "If you lean real close to the screen, you can almost hear a graphic designer screaming.")
