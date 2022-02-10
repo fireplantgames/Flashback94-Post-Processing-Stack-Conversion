@@ -1,137 +1,78 @@
-﻿
-//////////////////////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////////////////////
 //																						//
 // Flashback '94 Shader Pack for Unity 3D												//
 // © 2018 George Kokoris          														//
 //																						//
 // Post-process script for scaling the framebuffer and quantizing colors                //
 // Only for use with the 'Hidden/Flashback 94/Color Quantize' shader                    //
-//																						//
+//                                                                                      //
+// Modified by Fire Plant Games to work with the new post procesing stack               //
 //////////////////////////////////////////////////////////////////////////////////////////
 
 using UnityEngine;
+using UnityEngine.Rendering.PostProcessing;
 
-[ExecuteInEditMode]
-[RequireComponent(typeof(Camera))]
-[AddComponentMenu("Flashback 94/Post Process")]
-public class Flashback94_PostProcess : MonoBehaviour
+[System.Serializable]
+[PostProcess (typeof (Flashback94_PostProcessRenderer), PostProcessEvent.AfterStack, "Custom/Flashback Shader")]
+public sealed class Flashback94_PostProcess : PostProcessEffectSettings
 {
-    // Shader to use for color processing
-    public Shader colorShader = null;
-
-    // Runtime material generated from the above shader
-    private Material colorMaterial = null;
-
+    // Should we filter color?
+    public BoolParameter enableColorFiltering = new BoolParameter {value = true};
     // Bits per color channel
-    public int bitsPerChannel = 8;
-
-    // Enumeration for the type of downsampling
-    public enum DownsampleType { NONE, RELATIVE, ABSOLUTE };
-    public DownsampleType downsampling = DownsampleType.NONE;
-
-    // Scaling amount for relative downsampling
-    public int downsampleRelativeAmount = 2;
+    public FloatParameter bitsPerChannel = new FloatParameter {value = 8};
 
     // Width and height for absolute downsampling
-    public int downsampleAbsoluteWidth = 320;
-    public int downsampleAbsoluteHeight = 240;
+    public IntParameter downsampleAbsoluteWidth = new IntParameter { value = 320 };
+    public IntParameter downsampleAbsoluteHeight = new IntParameter {value = 240};
 
     // Enable/disable antialiasing when blitting
-    public bool downsampleAntialiasing = true;
+    public BoolParameter downsampleAntialiasing = new BoolParameter {value = false};
+}
 
-    void OnRenderImage(RenderTexture source, RenderTexture destination)
+public sealed class Flashback94_PostProcessRenderer : PostProcessEffectRenderer <Flashback94_PostProcess>
+{
+    public Material tempMaterial;
+
+    public override void Init()
     {
-        // Disable this component if the resource check fails
-        if (!CheckResources())
-        {
-            enabled = false;
-            return;
-        }
+        base.Init();
+        // set up our material
+        tempMaterial = new Material(Shader.Find ("Hidden/Flashback 94/Color Quantize"));
+        tempMaterial.hideFlags = HideFlags.DontSave;
+    }
+
+    public override void Render(PostProcessRenderContext context)
+    {
+        // Should we filter the color?
+        tempMaterial.SetFloat ("_ShouldStep", settings.enableColorFiltering ? 1.0f : -1.0f);
 
         // Set the number of color steps in the shader
-        colorMaterial.SetFloat("_ColorSteps", Mathf.Pow(2f, bitsPerChannel));
+        if (settings.enableColorFiltering)
+            tempMaterial.SetFloat ("_ColorSteps", Mathf.Pow (2f, settings.bitsPerChannel));
 
-        // Width and height for the buffer texture
-        var bufWidth = source.width;
-        var bufHeight = source.height;
-
-        // Switch statement for downsampling methods
-        switch (downsampling)
-        {
-            case DownsampleType.NONE:
-                // Blit directly through the color material and exit
-                Graphics.Blit(source, destination, colorMaterial);
-                return;
-
-            case DownsampleType.RELATIVE:
-                // Scale render texture by relative amount
-                bufWidth /= downsampleRelativeAmount;
-                bufHeight /= downsampleRelativeAmount;
-                break;
-
-            case DownsampleType.ABSOLUTE:
-                // Set render texture dimensions
-                bufWidth = downsampleAbsoluteWidth;
-                bufHeight = downsampleAbsoluteHeight;
-                break;
-        }
-
-        // Create a temporary buffer and filter it by point
+        // set our width/height
+        var bufWidth = settings.downsampleAbsoluteWidth;
+        var bufHeight = settings.downsampleAbsoluteHeight;
+        
+        // Create a temporary texture using our buffer width/height and filter it by point
         var buffer = RenderTexture.GetTemporary(bufWidth, bufHeight, 0);
         buffer.filterMode = FilterMode.Point;
 
-        // Set the filtering mode of the source texture before resizing
-        source.filterMode = downsampleAntialiasing ? FilterMode.Bilinear : FilterMode.Point;
+        // Create a new render texture (this will be our source) with our current width/height. Set it's filter mode appropriately
+        RenderTexture t = RenderTexture.GetTemporary (context.width, context.height, 0);
+        t.filterMode = settings.downsampleAntialiasing ? FilterMode.Bilinear : FilterMode.Point;
 
-        // Blit into the resized render texture through the color material
-        Graphics.BlitMultiTap(source, buffer, colorMaterial,
-            new Vector2(-1f, -1f),
-            new Vector2(-1f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(1f, -1f)
-            );
+        // blit our source into the new texture
+        context.command.Blit (context.source, t);
 
-        // Blit the result to the screen and release the buffer
-        Graphics.Blit(buffer, destination);
+        // blit our new texture into our buffer, passing it through the tempMaterial
+        context.command.Blit (t, buffer, tempMaterial);
+
+        // blit the buffer into the destination.
+        context.command.Blit (buffer, context.destination);
+
+        // cleanup.
         RenderTexture.ReleaseTemporary(buffer);
-    }
-
-    void OnDestroy()
-    {
-        // Destroy the material
-        if (colorMaterial != null) DestroyImmediate(colorMaterial);
-    }
-
-    bool CheckResources()
-    {
-        // Check the shader
-        if (colorShader == null)
-        {
-            Debug.LogWarning("<color=yellow>FLASHBACK '94 WARNING:</color> There is no shader attached to the post process!");
-            return false;
-        }
-
-        // Check if the shader is supported
-        if (!colorShader.isSupported)
-        {
-            Debug.LogWarning("<color=yellow>FLASHBACK '94 WARNING:</color> The shader '" + colorShader.name + "' is not supported on this platform!");
-            return false;
-        }
-
-        // Check if the platform supports image effects
-        if (!SystemInfo.supportsImageEffects)
-        {
-            Debug.LogWarning("<color=yellow>FLASHBACK '94 WARNING:</color> Image effects are not supported on this platform!");
-            return false;
-        }
-
-        // Create the material if it doesn't exist
-        if (colorMaterial == null)
-        {
-            colorMaterial = new Material(colorShader);
-            colorMaterial.hideFlags = HideFlags.DontSave;
-        }
-
-        return true;
+        RenderTexture.ReleaseTemporary(t);
     }
 }

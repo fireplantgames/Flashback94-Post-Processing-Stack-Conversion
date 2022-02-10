@@ -1,3 +1,6 @@
+**This branch only contains the post processing filter. If you want the rest of BurningNorth's object shader's you need to pull from the Master branch.**
+
+- Original Readme - 
 ## The *Flashback '94 Shader Pack* for Unity
 
 ![](Screenshots/fb94logo.jpg "If you lean real close to the screen, you can almost hear a graphic designer screaming.")
