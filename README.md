@@ -1,5 +1,7 @@
 **This branch only contains the post processing filter. If you want the rest of BurningNorth's object shaders you need to pull from the Master branch.**
 
+****NOTE**** **As of the latest commit the shader is added to a Resources subfolder, meaning if you end up not using the Flashback shader it'll still be compiled and added to a build if it is in your assets list. This is done to prevent forcing users to manually add the shader to their "Always Included Shaders" list for the shader to work in builds. This does not affect performance otherwise.**
+
 - Original Readme - 
 ## The *Flashback '94 Shader Pack* for Unity
 
